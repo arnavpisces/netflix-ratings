@@ -188,6 +188,9 @@ class NetflixRatingsExtension {
   }
 
   createBlacklistBadge(titleElement, titleText) {
+    const overlay = document.createElement('div');
+    overlay.className = 'rt-blacklist-overlay';
+    
     const badge = document.createElement('div');
     badge.className = 'rt-badge rt-badge-blacklist';
     
@@ -200,7 +203,7 @@ class NetflixRatingsExtension {
       <div class="rt-badge-content">
         <div class="rt-blacklist-warning">
           <span class="rt-icon">🚫</span>
-          <span class="rt-warning-text">Unwatchable</span>
+          <span class="rt-warning-text">Low Quality</span>
         </div>
       </div>
     `;
@@ -208,6 +211,7 @@ class NetflixRatingsExtension {
     const rect = titleElement.getBoundingClientRect();
     if (rect.width > 100 && rect.height > 100) {
       titleElement.style.position = 'relative';
+      titleElement.appendChild(overlay);
       titleElement.appendChild(badge);
     }
   }

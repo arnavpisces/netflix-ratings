@@ -152,20 +152,24 @@
   }
 }
 
+/* Blacklist overlay */
+.rt-blacklist-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(229, 9, 20, 0.5);
+  z-index: 998;
+  pointer-events: none;
+  border-radius: 4px;
+}
+
 /* Blacklist badge styles */
 .rt-badge-blacklist {
   background: rgba(229, 9, 20, 0.95);
   backdrop-filter: blur(4px);
-  animation: pulse 2s ease-in-out infinite;
-}
-
-@keyframes pulse {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.8;
-  }
+  z-index: 999;
 }
 
 .rt-blacklist-warning {
