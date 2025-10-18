@@ -268,39 +268,86 @@ class NetflixRatingsExtension {
     this.isProcessing = false;
   }
 
+  generateTitleVariations(title) {
+    const variations = [title];
+    
+    const cleanedTitle = title.replace(/[:\-–—]/g, ' ').replace(/\s+/g, ' ').trim();
+    if (cleanedTitle !== title) variations.push(cleanedTitle);
+    
+    const withoutYear = title.replace(/\s*\(?\d{4}\)?$/g, '').trim();
+    if (withoutYear !== title) variations.push(withoutYear);
+    
+    const withoutSpecialChars = title.replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ').trim();
+    if (withoutSpecialChars !== title) variations.push(withoutSpecialChars);
+    
+    const withoutArticles = title.replace(/^(The|A|An)\s+/i, '').trim();
+    if (withoutArticles !== title) variations.push(withoutArticles);
+    
+    return [...new Set(variations)];
+  }
+
   async fetchRating(titleText) {
-    try {
-      const response = await fetch(
-        `https://www.omdbapi.com/?t=${encodeURIComponent(titleText)}&apikey=trilogy`
-      );
-      
-      const data = await response.json();
-      
-      if (data.Response === 'True') {
-        const rtRating = data.Ratings?.find(r => r.Source === 'Rotten Tomatoes');
-        const imdbRating = data.imdbRating && data.imdbRating !== 'N/A' ? data.imdbRating + '/10' : null;
+    const variations = this.generateTitleVariations(titleText);
+    
+    for (const variation of variations) {
+      try {
+        const response = await fetch(
+          `https://www.omdbapi.com/?t=${encodeURIComponent(variation)}&apikey=trilogy`
+        );
         
-        if (rtRating || imdbRating) {
-          const ratings = {
-            critics: rtRating ? rtRating.Value : null,
-            audience: imdbRating,
-            title: data.Title,
-            year: data.Year
-          };
+        const data = await response.json();
+        
+        if (data.Response === 'True') {
+          const rtRating = data.Ratings?.find(r => r.Source === 'Rotten Tomatoes');
+          const imdbRating = data.imdbRating && data.imdbRating !== 'N/A' ? data.imdbRating + '/10' : null;
           
-          this.ratingCache.set(titleText, ratings);
-          
-          if (this.ratingCache.size % 10 === 0) {
-            this.saveCache();
+          if (rtRating || imdbRating) {
+            const ratings = {
+              critics: rtRating ? rtRating.Value : null,
+              audience: imdbRating,
+              title: data.Title,
+              year: data.Year
+            };
+            
+            this.ratingCache.set(titleText, ratings);
+            
+            if (this.ratingCache.size % 10 === 0) {
+              this.saveCache();
+            }
+            
+            return ratings;
           }
-          
-          return ratings;
         }
+      } catch (error) {
+        console.log(`API request failed for "${variation}":`, error);
       }
-    } catch (error) {
-      console.log('API request failed:', error);
     }
 
+    const rtData = await this.searchRottenTomatoes(titleText);
+    if (rtData) {
+      this.ratingCache.set(titleText, rtData);
+      if (this.ratingCache.size % 10 === 0) {
+        this.saveCache();
+      }
+      return rtData;
+    }
+
+    return null;
+  }
+
+  async searchRottenTomatoes(titleText) {
+    try {
+      const response = await chrome.runtime.sendMessage({
+        action: 'searchRottenTomatoes',
+        title: titleText
+      });
+      
+      if (response && response.ratings) {
+        return response.ratings;
+      }
+    } catch (error) {
+      console.log('RT search failed:', error);
+    }
     return null;
   }
 
