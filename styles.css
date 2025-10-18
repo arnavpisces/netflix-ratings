@@ -1,0 +1,183 @@
+.rt-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.8);
+  border-radius: 6px;
+  padding: 4px 6px;
+  font-family: 'Helvetica Neue', Arial, sans-serif;
+  backdrop-filter: blur(4px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  pointer-events: none;
+  max-width: 120px;
+}
+
+.rt-badge-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: center;
+}
+
+.rt-score {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  color: white;
+  line-height: 1;
+}
+
+.rt-score.critics {
+  color: #ff6b35;
+}
+
+.rt-score.audience {
+  color: #ffd700;
+}
+
+.rt-icon {
+  font-size: 12px;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.5));
+}
+
+.rt-percentage {
+  font-size: 10px;
+  font-weight: 700;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+  white-space: nowrap;
+}
+
+/* Hover effects */
+.rt-badge:hover {
+  transform: scale(1.05);
+  transition: transform 0.2s ease;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .rt-badge {
+    top: 4px;
+    right: 4px;
+    padding: 3px 5px;
+    border-radius: 4px;
+  }
+  
+  .rt-score {
+    font-size: 10px;
+    gap: 2px;
+  }
+  
+  .rt-icon {
+    font-size: 10px;
+  }
+  
+  .rt-percentage {
+    font-size: 9px;
+  }
+}
+
+/* Netflix-specific positioning adjustments */
+.title-card-container .rt-badge,
+.slider-item .rt-badge {
+  top: 6px;
+  right: 6px;
+}
+
+.bob-card .rt-badge {
+  top: 10px;
+  right: 10px;
+}
+
+/* Modal and preview hover styles */
+.rt-badge-modal {
+  top: 15px;
+  right: 15px;
+  padding: 8px 12px;
+  font-size: 14px;
+  background: rgba(0, 0, 0, 0.85);
+  z-index: 9999;
+}
+
+.rt-badge-modal .rt-score {
+  font-size: 14px;
+  gap: 6px;
+}
+
+.rt-badge-modal .rt-icon {
+  font-size: 16px;
+}
+
+.rt-badge-modal .rt-percentage {
+  font-size: 13px;
+}
+
+.previewModal--container .rt-badge,
+.jawBoneContainer .rt-badge,
+[role="dialog"] .rt-badge {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  z-index: 9999;
+}
+
+/* Ensure badge visibility on dark backgrounds */
+.rt-badge::before {
+  content: '';
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  right: -2px;
+  bottom: -2px;
+  background: rgba(0, 0, 0, 0.4);
+  border-radius: 8px;
+  z-index: -1;
+}
+
+/* Animation for when badges appear */
+.rt-badge {
+  animation: fadeInBadge 0.3s ease-out;
+}
+
+@keyframes fadeInBadge {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Blacklist badge styles */
+.rt-badge-blacklist {
+  background: rgba(229, 9, 20, 0.95);
+  backdrop-filter: blur(4px);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+
+.rt-blacklist-warning {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rt-warning-text {
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
