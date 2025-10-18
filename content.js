@@ -188,23 +188,8 @@ class NetflixRatingsExtension {
   }
 
   createBlacklistBadge(titleElement, titleText) {
-    const imageContainer = titleElement.querySelector('.boxart-container, .ptrack-content, img') || titleElement;
-    
     const overlay = document.createElement('div');
     overlay.className = 'rt-blacklist-overlay';
-    overlay.style.cssText = `
-      position: absolute !important;
-      top: 0 !important;
-      left: 0 !important;
-      right: 0 !important;
-      bottom: 0 !important;
-      width: 100% !important;
-      height: 100% !important;
-      background: rgba(229, 9, 20, 0.5) !important;
-      z-index: 998 !important;
-      pointer-events: none !important;
-      border-radius: 4px;
-    `;
     
     const badge = document.createElement('div');
     badge.className = 'rt-badge rt-badge-blacklist';
@@ -226,14 +211,7 @@ class NetflixRatingsExtension {
     const rect = titleElement.getBoundingClientRect();
     if (rect.width > 100 && rect.height > 100) {
       titleElement.style.position = 'relative';
-      
-      if (imageContainer && imageContainer !== titleElement) {
-        imageContainer.style.position = 'relative';
-        imageContainer.appendChild(overlay);
-      } else {
-        titleElement.appendChild(overlay);
-      }
-      
+      titleElement.appendChild(overlay);
       titleElement.appendChild(badge);
     }
   }
