@@ -3,3 +3,4 @@ extension.zip
 .DS_Store
 convert_images.py
 coverage/
+images/
