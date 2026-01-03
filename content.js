@@ -1,3 +1,6 @@
+const CACHE_EXPIRY_DAYS = 7;
+const CACHE_EXPIRY_MS = CACHE_EXPIRY_DAYS * 24 * 60 * 60 * 1000;
+
 class NetflixRatingsExtension {
   constructor() {
     this.processedTitles = new WeakSet();
@@ -6,11 +9,8 @@ class NetflixRatingsExtension {
     this.observer = null;
     this.intersectionObserver = null;
     this.pendingRequests = new Map();
-    this.requestQueue = [];
-    this.isProcessing = false;
+    this.requestQueue = []; // Queue for UI updates if needed, but network queue is now in background
     this.debounceTimer = null;
-    this.maxConcurrentRequests = 3;
-    this.activeRequests = 0;
     this.init();
   }
 
@@ -41,7 +41,18 @@ class NetflixRatingsExtension {
     try {
       const result = await chrome.storage.local.get('ratingCache');
       if (result.ratingCache) {
-        this.ratingCache = new Map(Object.entries(result.ratingCache));
+        const now = Date.now();
+        Object.entries(result.ratingCache).forEach(([key, value]) => {
+          // Check for expiry
+          if (value.timestamp && (now - value.timestamp < CACHE_EXPIRY_MS)) {
+             this.ratingCache.set(key, value);
+          }
+        });
+        
+        // Save back if we pruned anything (optional optimization)
+        if (this.ratingCache.size < Object.keys(result.ratingCache).length) {
+          this.saveCache();
+        }
       }
     } catch (error) {
       console.log('Failed to load cache:', error);
@@ -124,6 +135,7 @@ class NetflixRatingsExtension {
   }
 
   extractTitleText(element) {
+    // Selectors ordered by reliability
     const titleSelectors = [
       '.fallback-text',
       '.bob-title',
@@ -159,6 +171,7 @@ class NetflixRatingsExtension {
   }
 
   cleanTitle(title) {
+    if (!title) return '';
     return title
       .replace(/^(Play|Resume|My List|More Info|Rate|Thumbs Up|Thumbs Down)/i, '')
       .replace(/\s+/g, ' ')
@@ -172,12 +185,41 @@ class NetflixRatingsExtension {
     }
 
     try {
-      const ratings = await this.getRatings(titleText);
+      // Check cache first
+      if (this.ratingCache.has(titleText)) {
+        const cached = this.ratingCache.get(titleText);
+        // Only show if it's not a "missing" record
+        if (cached && !cached.missing) {
+           this.createBadge(titleElement, cached.ratings);
+        }
+        return;
+      }
+
+      // If already pending, wait for it
+      if (this.pendingRequests.has(titleText)) {
+        await this.pendingRequests.get(titleText);
+        // Re-check cache after wait
+        if (this.ratingCache.has(titleText)) {
+           const cached = this.ratingCache.get(titleText);
+           if (cached && !cached.missing) {
+             this.createBadge(titleElement, cached.ratings);
+           }
+        }
+        return;
+      }
+
+      const requestPromise = this.fetchRating(titleText);
+      this.pendingRequests.set(titleText, requestPromise);
+
+      const ratings = await requestPromise;
+      this.pendingRequests.delete(titleText);
+
       if (ratings) {
         this.createBadge(titleElement, ratings);
       }
     } catch (error) {
       console.log(`Failed to get ratings for "${titleText}":`, error);
+      this.pendingRequests.delete(titleText);
     }
   }
 
@@ -216,62 +258,6 @@ class NetflixRatingsExtension {
     }
   }
 
-  async getRatings(titleText) {
-    if (this.ratingCache.has(titleText)) {
-      return this.ratingCache.get(titleText);
-    }
-
-    if (this.pendingRequests.has(titleText)) {
-      return this.pendingRequests.get(titleText);
-    }
-
-    const requestPromise = this.queueRequest(titleText);
-    this.pendingRequests.set(titleText, requestPromise);
-
-    try {
-      const ratings = await requestPromise;
-      this.pendingRequests.delete(titleText);
-      return ratings;
-    } catch (error) {
-      this.pendingRequests.delete(titleText);
-      throw error;
-    }
-  }
-
-  queueRequest(titleText) {
-    return new Promise((resolve, reject) => {
-      this.requestQueue.push({ titleText, resolve, reject });
-      this.processQueue();
-    });
-  }
-
-  async processQueue() {
-    if (this.isProcessing || this.requestQueue.length === 0) {
-      return;
-    }
-
-    this.isProcessing = true;
-
-    while (this.requestQueue.length > 0 && this.activeRequests < this.maxConcurrentRequests) {
-      const { titleText, resolve, reject } = this.requestQueue.shift();
-      this.activeRequests++;
-
-      this.fetchRating(titleText)
-        .then(ratings => {
-          resolve(ratings);
-          this.activeRequests--;
-          this.processQueue();
-        })
-        .catch(error => {
-          reject(error);
-          this.activeRequests--;
-          this.processQueue();
-        });
-    }
-
-    this.isProcessing = false;
-  }
-
   generateTitleVariations(title) {
     const variations = [title];
     
@@ -293,53 +279,36 @@ class NetflixRatingsExtension {
   async fetchRating(titleText) {
     const variations = this.generateTitleVariations(titleText);
     
+    // Try OMDb first via Background
     for (const variation of variations) {
       try {
-        const response = await fetch(
-          `https://www.omdbapi.com/?t=${encodeURIComponent(variation)}&apikey=trilogy`
-        );
+        const response = await chrome.runtime.sendMessage({
+          action: 'getRatings',
+          title: variation
+        });
         
-        const data = await response.json();
-        
-        if (data.Response === 'True') {
-          const rtRating = data.Ratings?.find(r => r.Source === 'Rotten Tomatoes');
-          const imdbRating = data.imdbRating && data.imdbRating !== 'N/A' ? data.imdbRating + '/10' : null;
+        if (response && response.Response === 'True') {
+          const rtRating = response.Ratings?.find(r => r.Source === 'Rotten Tomatoes');
+          const imdbRating = response.imdbRating && response.imdbRating !== 'N/A' ? response.imdbRating + '/10' : null;
           
           if (rtRating || imdbRating) {
             const ratings = {
               critics: rtRating ? rtRating.Value : null,
               audience: imdbRating,
-              title: data.Title,
-              year: data.Year
+              title: response.Title,
+              year: response.Year
             };
             
-            this.ratingCache.set(titleText, ratings);
-            
-            if (this.ratingCache.size % 10 === 0) {
-              this.saveCache();
-            }
-            
+            this.cacheResult(titleText, ratings);
             return ratings;
           }
         }
       } catch (error) {
-        console.log(`API request failed for "${variation}":`, error);
+        console.log(`OMDb check failed for "${variation}":`, error);
       }
     }
 
-    const rtData = await this.searchRottenTomatoes(titleText);
-    if (rtData) {
-      this.ratingCache.set(titleText, rtData);
-      if (this.ratingCache.size % 10 === 0) {
-        this.saveCache();
-      }
-      return rtData;
-    }
-
-    return null;
-  }
-
-  async searchRottenTomatoes(titleText) {
+    // Fallback to scraping via Background
     try {
       const response = await chrome.runtime.sendMessage({
         action: 'searchRottenTomatoes',
@@ -347,12 +316,30 @@ class NetflixRatingsExtension {
       });
       
       if (response && response.ratings) {
+        this.cacheResult(titleText, response.ratings);
         return response.ratings;
       }
     } catch (error) {
-      console.log('RT search failed:', error);
+       console.log('RT search failed:', error);
     }
+
+    // If nothing found, cache as missing to avoid retry loop
+    this.cacheResult(titleText, null, true);
     return null;
+  }
+
+  cacheResult(key, ratings, missing = false) {
+    const cacheItem = {
+      ratings,
+      missing,
+      timestamp: Date.now()
+    };
+    this.ratingCache.set(key, cacheItem);
+    
+    // Save periodically
+    if (this.ratingCache.size % 5 === 0) {
+      this.saveCache();
+    }
   }
 
   createBadge(titleElement, ratings) {
@@ -401,4 +388,8 @@ if (document.readyState === 'loading') {
   });
 } else {
   new NetflixRatingsExtension();
+}
+
+if (typeof module !== 'undefined') {
+  module.exports = { NetflixRatingsExtension };
 }

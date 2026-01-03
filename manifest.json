@@ -1,16 +1,14 @@
 {
   "manifest_version": 3,
-  "name": "Netflix Rotten Tomatoes Ratings",
+  "name": "Ratings for Netflix",
   "version": "1.0",
-  "description": "Shows Rotten Tomatoes critics and audience ratings on Netflix titles",
+  "description": "Shows IMDb & Rotten Tomatoes ratings on Netflix. Includes a visual filter for blacklisted titles.",
   "permissions": [
-    "activeTab",
     "storage"
   ],
   "host_permissions": [
-    "https://www.netflix.com/*",
     "https://www.rottentomatoes.com/*",
-    "https://api.rottentomatoes.com/*"
+    "https://www.omdbapi.com/*"
   ],
   "content_scripts": [
     {
@@ -24,8 +22,18 @@
     "service_worker": "background.js"
   },
   "action": {
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    },
     "default_popup": "popup.html",
     "default_title": "Netflix Show Blacklist"
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
   },
   "web_accessible_resources": [
     {

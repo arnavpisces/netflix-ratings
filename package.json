@@ -1,0 +1,17 @@
+{
+  "name": "netflix-movie-rating",
+  "version": "1.0.0",
+  "description": "Shows IMDb & Rotten Tomatoes ratings on Netflix. Includes a visual filter for blacklisted titles.",
+  "main": "background.js",
+  "scripts": {
+    "test": "jest"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "jest-chrome": "^0.8.0",
+    "jest-environment-jsdom": "^29.7.0"
+  }
+}
