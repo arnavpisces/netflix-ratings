@@ -10,23 +10,37 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   function displayBlacklist(blacklist) {
+    blacklistDiv.textContent = '';
+
     if (blacklist.length === 0) {
-      blacklistDiv.innerHTML = '<div style="padding: 10px; text-align: center; color: #999;">No shows blacklisted yet</div>';
+      const emptyState = document.createElement('div');
+      emptyState.style.padding = '10px';
+      emptyState.style.textAlign = 'center';
+      emptyState.style.color = '#999';
+      emptyState.textContent = 'No shows blacklisted yet';
+      blacklistDiv.appendChild(emptyState);
       return;
     }
 
-    blacklistDiv.innerHTML = blacklist.map((show, index) => `
-      <div class="blacklist-item">
-        <span>${show}</span>
-        <button class="remove-btn" data-index="${index}">Remove</button>
-      </div>
-    `).join('');
+    blacklist.forEach((show, index) => {
+      const item = document.createElement('div');
+      item.className = 'blacklist-item';
 
-    document.querySelectorAll('.remove-btn').forEach(btn => {
-      btn.addEventListener('click', async (e) => {
-        const index = parseInt(e.target.dataset.index);
-        await removeFromBlacklist(index);
+      const label = document.createElement('span');
+      label.textContent = show;
+
+      const removeBtn = document.createElement('button');
+      removeBtn.className = 'remove-btn';
+      removeBtn.textContent = 'Remove';
+      removeBtn.dataset.index = String(index);
+      removeBtn.addEventListener('click', async (e) => {
+        const targetIndex = Number(e.currentTarget.dataset.index);
+        await removeFromBlacklist(targetIndex);
       });
+
+      item.appendChild(label);
+      item.appendChild(removeBtn);
+      blacklistDiv.appendChild(item);
     });
   }
 

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Ratings for Netflix",
-  "version": "1.0",
+  "version": "1.0.2",
   "description": "Shows IMDb & Rotten Tomatoes ratings on Netflix. Includes a visual filter for blacklisted titles.",
   "permissions": [
     "storage"
@@ -12,9 +12,15 @@
   ],
   "content_scripts": [
     {
-      "matches": ["https://www.netflix.com/*"],
-      "js": ["content.js"],
-      "css": ["styles.css"],
+      "matches": [
+        "https://www.netflix.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "css": [
+        "styles.css"
+      ],
       "run_at": "document_end"
     }
   ],
@@ -37,8 +43,13 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["*.png", "*.svg"],
-      "matches": ["https://www.netflix.com/*"]
+      "resources": [
+        "*.png",
+        "*.svg"
+      ],
+      "matches": [
+        "https://www.netflix.com/*"
+      ]
     }
   ]
 }

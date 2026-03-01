@@ -63,6 +63,129 @@ async function handleOMDbRequest(title) {
   return response.json();
 }
 
+function normalizeForMatch(text) {
+  if (!text) return '';
+  return text
+    .toLowerCase()
+    .replace(/&amp;/g, ' and ')
+    .replace(/[_-]/g, ' ')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function extractRottenTomatoesCandidates(searchHtml) {
+  const regex = /href="(https?:\/\/www\.rottentomatoes\.com\/(?:m|tv)\/[^"?#]+|\/(?:m|tv)\/[^"?#]+)"/gi;
+  const candidates = new Set();
+  let match = null;
+
+  while ((match = regex.exec(searchHtml)) !== null) {
+    const href = match[1];
+    const path = href.replace(/^https?:\/\/www\.rottentomatoes\.com/i, '');
+    candidates.add(path);
+  }
+
+  return Array.from(candidates);
+}
+
+function scoreCandidatePath(path, title) {
+  const slug = path.replace(/^\/(?:m|tv)\//, '');
+  const normalizedSlug = normalizeForMatch(decodeURIComponent(slug));
+  const normalizedTitle = normalizeForMatch(title);
+
+  if (!normalizedSlug || !normalizedTitle) return 0;
+  if (normalizedSlug === normalizedTitle) return 1000;
+  if (normalizedSlug.includes(normalizedTitle)) return 750;
+  if (normalizedTitle.includes(normalizedSlug)) return 700;
+
+  const slugTokens = new Set(normalizedSlug.split(' ').filter(Boolean));
+  const titleTokens = new Set(normalizedTitle.split(' ').filter(Boolean));
+  if (slugTokens.size === 0 || titleTokens.size === 0) return 0;
+
+  let overlap = 0;
+  for (const token of titleTokens) {
+    if (slugTokens.has(token)) overlap += 1;
+  }
+
+  const overlapRatio = overlap / titleTokens.size;
+  if (overlapRatio === 0) return 0;
+
+  const sizePenalty = Math.abs(slugTokens.size - titleTokens.size);
+  return overlap * 100 + Math.round(overlapRatio * 100) - sizePenalty * 3;
+}
+
+function selectBestRottenTomatoesPath(searchHtml, title) {
+  const candidates = extractRottenTomatoesCandidates(searchHtml);
+  if (candidates.length === 0) return null;
+
+  let bestPath = null;
+  let bestScore = 0;
+
+  for (const path of candidates) {
+    const score = scoreCandidatePath(path, title);
+    if (score > bestScore) {
+      bestScore = score;
+      bestPath = path;
+    }
+  }
+
+  if (bestPath) return bestPath;
+  return candidates[0];
+}
+
+function extractScoreFromMediaScorecardJson(detailsHtml) {
+  const mediaScorecardMatch = detailsHtml.match(
+    /<script[^>]*id="media-scorecard-json"[^>]*>([\s\S]*?)<\/script>/i
+  );
+
+  if (!mediaScorecardMatch) return { critics: null, audience: null };
+
+  try {
+    const parsed = JSON.parse(mediaScorecardMatch[1].trim());
+    const critics = parsed?.criticsScore?.score ? String(parsed.criticsScore.score) : null;
+    const audience = parsed?.audienceScore?.score ? String(parsed.audienceScore.score) : null;
+    return { critics, audience };
+  } catch (error) {
+    return { critics: null, audience: null };
+  }
+}
+
+function extractScoresFromDetailsHtml(detailsHtml) {
+  let critics =
+    detailsHtml.match(/tomatometerscore=["']?\s*(\d+)/i)?.[1] ||
+    detailsHtml.match(/critics-score\s*score="(\d+)"/i)?.[1] ||
+    null;
+
+  let audience =
+    detailsHtml.match(/audiencescore=["']?\s*(\d+)/i)?.[1] ||
+    detailsHtml.match(/audience-score\s*score="(\d+)"/i)?.[1] ||
+    null;
+
+  if (!critics || !audience) {
+    const mediaJsonScores = extractScoreFromMediaScorecardJson(detailsHtml);
+    critics = critics || mediaJsonScores.critics;
+    audience = audience || mediaJsonScores.audience;
+  }
+
+  // Final fallback for embedded JSON blobs not under media-scorecard-json.
+  if (!critics) {
+    critics = detailsHtml.match(/"criticsScore"\s*:\s*\{[\s\S]*?"score"\s*:\s*"(\d+)"/i)?.[1] || null;
+  }
+  if (!audience) {
+    audience = detailsHtml.match(/"audienceScore"\s*:\s*\{[\s\S]*?"score"\s*:\s*"(\d+)"/i)?.[1] || null;
+  }
+
+  // Lowest-confidence fallback: slot text can be present for embedded widgets.
+  if (!critics) {
+    critics = detailsHtml.match(/slot="criticsScore"[^>]*>\s*(\d+)%/i)?.[1] || null;
+  }
+  if (!audience) {
+    audience = detailsHtml.match(/slot="audienceScore"[^>]*>\s*(\d+)%/i)?.[1] || null;
+  }
+
+  return { critics, audience };
+}
+
 async function searchRottenTomatoesAPI(title) {
   try {
     // 1. Search for the movie/show
@@ -70,32 +193,20 @@ async function searchRottenTomatoesAPI(title) {
     if (!searchResponse.ok) return null;
     const searchHtml = await searchResponse.text();
     
-    // Extract the first movie/tv match URL
-    // Looking for specific RT patterns. This is fragile and may need updates.
-    // We prioritize movies (/m/) but could also check tv (/tv/)
-    const match = searchHtml.match(/href="([^"]*\/(?:m|tv)\/[^"]+)"/);
-    if (!match) return null;
-    
-    const relativeUrl = match[1];
+    const relativeUrl = selectBestRottenTomatoesPath(searchHtml, title);
+    if (!relativeUrl) return null;
     const detailsUrl = `https://www.rottentomatoes.com${relativeUrl}`;
     
     // 2. Fetch details page
     const detailsResponse = await fetch(detailsUrl);
     if (!detailsResponse.ok) return null;
     const detailsHtml = await detailsResponse.text();
-    
-    // 3. Extract scores using Regex (fragile, relies on RT DOM structure)
-    // Updated regex to be slightly more robust to whitespace
-    const tomatometer = detailsHtml.match(/tomatometerscore=["']?\s*(\d+)/i) || 
-                        detailsHtml.match(/critics-score\s*score="(\d+)"/i); // newer RT custom elements
-                        
-    const audienceScore = detailsHtml.match(/audiencescore=["']?\s*(\d+)/i) ||
-                          detailsHtml.match(/audience-score\s*score="(\d+)"/i);
+    const scores = extractScoresFromDetailsHtml(detailsHtml);
 
-    if (tomatometer || audienceScore) {
+    if (scores.critics || scores.audience) {
       return {
-        critics: tomatometer ? `${tomatometer[1]}%` : null,
-        audience: audienceScore ? `${audienceScore[1]}%` : null,
+        critics: scores.critics ? `${scores.critics}%` : null,
+        audience: scores.audience ? `${scores.audience}%` : null,
         title: title,
         url: detailsUrl
       };
@@ -112,6 +223,8 @@ if (typeof module !== 'undefined') {
     enqueueRottenTomatoesRequest,
     processQueue,
     searchRottenTomatoesAPI,
-    handleOMDbRequest
+    handleOMDbRequest,
+    selectBestRottenTomatoesPath,
+    extractScoresFromDetailsHtml
   };
 }
