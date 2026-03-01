@@ -4,6 +4,10 @@ Chrome extension that shows Rotten Tomatoes and IMDb ratings on Netflix titles, 
 
 ## Installation
 
+- Chrome Web Store: [Ratings for Netflix](https://chromewebstore.google.com/detail/ratings-for-netflix/mcdcmoicdjglabkdgegepmdjogcongog)
+
+### Load Unpacked (Development)
+
 1. Clone this repo
 2. Open Chrome → `chrome://extensions/`
 3. Enable "Developer mode"
